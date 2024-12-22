@@ -8,6 +8,7 @@ from torch_scatter import scatter_add
 
 
 def normalize_laplacian(edge_index, edge_weight):
+    # 모든 user, item 노드의 수
     num_nodes = maybe_num_nodes(edge_index)
     row, col = edge_index[0], edge_index[1]
     deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
@@ -19,6 +20,7 @@ def normalize_laplacian(edge_index, edge_weight):
 
 
 class Our_GCNs(MessagePassing):
+    # aggr: The aggregation scheme to use
     def __init__(self, in_channels, out_channels):
         super(Our_GCNs, self).__init__(aggr="add")
         self.in_channels = in_channels
@@ -28,9 +30,11 @@ class Our_GCNs(MessagePassing):
         self.weight_vector = weight_vector
         return self.propagate(edge_index, size=size, x=x)
 
+    # @override
     def message(self, x_j):
         return x_j * self.weight_vector
 
+    # @override
     def update(self, aggr_out):
         return aggr_out
 
@@ -343,15 +347,23 @@ class MONET(nn.Module):
             lightgcn,
         )
 
+        # shape -> (2, max(user_num, item_num))
         nonzero_idx = torch.tensor(self.nonzero_idx).cuda().long().T
+        # item idx에 user의 수를 더하여 겹치지 않게 설정
         nonzero_idx[1] = nonzero_idx[1] + self.n_users
+        # shape -> (2, (user_num + item_num))
+        # user -> item, item -> user
         self.edge_index = torch.cat(
             [nonzero_idx, torch.stack([nonzero_idx[1], nonzero_idx[0]], dim=0)], dim=1
         )
+        # shape -> ((user_num + item_num), 1)
         self.edge_weight = torch.ones((self.edge_index.size(1))).cuda().view(-1, 1)
+        # shape -> ((user_num + item_num), 1)
         self.edge_weight = normalize_laplacian(self.edge_index, self.edge_weight)
 
+        # shape -> (2, max(user_num, item_num))
         nonzero_idx = torch.tensor(self.nonzero_idx).cuda().long().T
+        # user-item interaction tensor
         self.adj = (
             torch.sparse.FloatTensor(
                 nonzero_idx,

@@ -12,7 +12,7 @@ import pandas as pd
 import scipy.sparse as sp
 from gensim.models.doc2vec import Doc2Vec
 
-
+# asin: Amazon Standard Identification Number
 class Data(object):
     def __init__(self, path, batch_size):
         self.path = path + "/5-core"
@@ -57,6 +57,7 @@ class Data(object):
             except Exception:
                 continue
 
+        # 여기서 1개 씩 더하는 이유는?
         self.n_items += 1
         self.n_users += 1
 

@@ -19,26 +19,28 @@ class Trainer(object):
 
         self.feat_embed_dim = args.feat_embed_dim
         self.lr = args.lr
-        self.emb_dim = args.embed_size
-        self.batch_size = args.batch_size
-        self.n_layers = args.n_layers
-        self.has_norm = args.has_norm
+        self.emb_dim = args.embed_size # 64
+        self.batch_size = args.batch_size # 1024
+        self.n_layers = args.n_layers # 2
+        self.has_norm = args.has_norm # True
         self.regs = eval(args.regs)
-        self.decay = self.regs[0]
-        self.lamb = self.regs[1]
-        self.alpha = args.alpha
-        self.beta = args.beta
+        self.decay = self.regs[0] # 1e-5
+        self.lamb = self.regs[1] # 1e-5
+        self.alpha = args.alpha # 1.0 Coefficient of self node features.
+        self.beta = args.beta # 0.3
         self.dataset = args.dataset
         self.model_name = args.model_name
-        self.agg = args.agg
-        self.target_aware = args.target_aware
-        self.cf = args.cf
-        self.cf_gcn = args.cf_gcn
-        self.lightgcn = args.lightgcn
+        self.agg = args.agg # concat. Choose a dataset from {sum, weighted_sum, concat, fc}
+        self.target_aware = args.target_aware # True
+        self.cf = args.cf # False
+        self.cf_gcn = args.cf_gcn # LightGCN. Choose a dataset from {MeGCN, LightGCN
+        self.lightgcn = args.lightgcn # False
 
-        self.nonzero_idx = data_config["nonzero_idx"]
+        self.nonzero_idx = data_config["nonzero_idx"] # interaction이 있는 좌표
 
+        # key: asin, value: (4096,) shape array
         self.image_feats = np.load("data/{}/image_feat.npy".format(self.dataset))
+        # text_feat.npy는 아직 찾지 못함
         self.text_feats = np.load("data/{}/text_feat.npy".format(self.dataset))
 
         self.model = MONET(
