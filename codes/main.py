@@ -33,7 +33,7 @@ class Trainer(object):
         self.agg = args.agg # concat. Choose a dataset from {sum, weighted_sum, concat, fc}
         self.target_aware = args.target_aware # True
         self.cf = args.cf # False
-        self.cf_gcn = args.cf_gcn # LightGCN. Choose a dataset from {MeGCN, LightGCN
+        self.cf_gcn = args.cf_gcn # LightGCN. Choose a dataset from {MeGCN, LightGCN}
         self.lightgcn = args.lightgcn # False
 
         self.nonzero_idx = data_config["nonzero_idx"] # interaction이 있는 좌표
@@ -65,6 +65,7 @@ class Trainer(object):
         self.lr_scheduler = self.set_lr_scheduler()
 
     def set_lr_scheduler(self):
+        # 50 epoch마다 학습률을 0.96씩 낮추기.
         fac = lambda epoch: 0.96 ** (epoch / 50)
         scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=fac)
         return scheduler
@@ -86,6 +87,7 @@ class Trainer(object):
 
     def train(self):
         nonzero_idx = torch.tensor(self.nonzero_idx).cuda().long().T
+        # MONET class의 self.adj와 동일
         self.adj = (
             torch.sparse.FloatTensor(
                 nonzero_idx,
@@ -106,7 +108,10 @@ class Trainer(object):
             for _ in range(n_batch):
                 self.model.train()
                 self.optimizer.zero_grad()
+                # user_emb -> image/text에 따른 user의 선호 embedding
+                # item_emb -> image/text에 따른 item embedding
                 user_emb, item_emb = self.model()
+                # batch size만큼 user, positive/negative item.
                 users, pos_items, neg_items = data_generator.sample()
 
                 batch_mf_loss, batch_emb_loss, batch_reg_loss = self.model.bpr_loss(

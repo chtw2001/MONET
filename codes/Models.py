@@ -143,26 +143,35 @@ class MeGCN(nn.Module):
 
     def forward(self, edge_index, edge_weight, _eval=False):
         # transform
+        # 4096 -> 64
+        # (item_num, 64)
         image_emb = self.image_trs(
             self.image_embedding.weight
         )  # [# of items, feat_embed_dim]
+        # 1024 -> 64
+        # (item_num, 64)
         text_emb = self.text_trs(
             self.text_embedding.weight
         )  # [# of items, feat_embed_dim]
 
+        # True. l2노름으로 정규화
         if self.has_norm:
             image_emb = F.normalize(image_emb)
             text_emb = F.normalize(text_emb)
+    
+        # self.image_preference.weight -> (user_num, 64)
         image_preference = self.image_preference.weight
         text_preference = self.text_preference.weight
 
         # propagate
+        # ((user_num + item_num), 64)
         ego_image_emb = torch.cat([image_preference, image_emb], dim=0)
         ego_text_emb = torch.cat([text_preference, text_emb], dim=0)
 
         if self.cf:
             user_emb = self.user_embedding.weight
             item_emb = self.item_embedding.weight
+            # ((user_num + item_num), 64)
             ego_cf_emb = torch.cat([user_emb, item_emb], dim=0)
             if self.cf_gcn == "LightGCN":
                 all_cf_emb = [ego_cf_emb]
@@ -173,23 +182,30 @@ class MeGCN(nn.Module):
 
         for layer in self.layers:
             if not self.lightgcn:
+                # (x, index, weight)
+                # ego_image/text_emb를 계속 갱신
                 side_image_emb = layer(ego_image_emb, edge_index, edge_weight)
                 side_text_emb = layer(ego_text_emb, edge_index, edge_weight)
 
                 ego_image_emb = side_image_emb + self.alpha * ego_image_emb
                 ego_text_emb = side_text_emb + self.alpha * ego_text_emb
             else:
+                # 이전 ego_image/text_emb에 대해서 계산
                 side_image_emb = layer(ego_image_emb, edge_index, edge_weight)
                 side_text_emb = layer(ego_text_emb, edge_index, edge_weight)
                 ego_image_emb = side_image_emb
                 ego_text_emb = side_text_emb
+                # ego_image/text_emb 누적 후 stack, mean
                 all_image_emb += [ego_image_emb]
                 all_text_emb += [ego_text_emb]
             if self.cf:
                 if self.cf_gcn == "MeGCN":
+                    # ego_cf_emb를 계속 갱신
                     side_cf_emb = layer(ego_cf_emb, edge_index, edge_weight)
                     ego_cf_emb = side_cf_emb + self.alpha * ego_cf_emb
+                    # self.alpha -> ego_cf_emb의 가중치
                 elif self.cf_gcn == "LightGCN":
+                    # ego_cf_emb를 누적하여 추후에 stack, mean
                     side_cf_emb = layer(ego_cf_emb, edge_index, edge_weight)
                     ego_cf_emb = side_cf_emb
                     all_cf_emb += [ego_cf_emb]
@@ -202,6 +218,7 @@ class MeGCN(nn.Module):
                 ego_text_emb, [self.n_users, self.n_items], dim=0
             )
         else:
+            # stack, mean 과정
             all_image_emb = torch.stack(all_image_emb, dim=1)
             all_image_emb = all_image_emb.mean(dim=1, keepdim=False)
             final_image_preference, final_image_emb = torch.split(
@@ -220,12 +237,16 @@ class MeGCN(nn.Module):
                     ego_cf_emb, [self.n_users, self.n_items], dim=0
                 )
             elif self.cf_gcn == "LightGCN":
+                # stack, mean 과정
                 all_cf_emb = torch.stack(all_cf_emb, dim=1)
                 all_cf_emb = all_cf_emb.mean(dim=1, keepdim=False)
                 final_cf_user_emb, final_cf_item_emb = torch.split(
                     all_cf_emb, [self.n_users, self.n_items], dim=0
                 )
 
+        # final_image_preference, final_image_emb
+        # final_text_preference, final_text_emb
+        # final_cf_user_emb, final_cf_item_emb 출력
         if _eval:
             return ego_image_emb, ego_text_emb
 
@@ -243,6 +264,7 @@ class MeGCN(nn.Module):
                     final_image_preference + final_text_preference
                 )  # [# of users, feat_embed_dim]
             elif self.agg == "weighted_sum":
+                # [0.5, 0.5]
                 weight = self.softmax(self.modal_weight)
                 items = (
                     weight[0] * final_image_emb + weight[1] * final_text_emb
@@ -252,6 +274,7 @@ class MeGCN(nn.Module):
                     + weight[1] * final_text_preference
                 )  # [# of users, feat_embed_dim]
             elif self.agg == "fc":
+                # linear transfor -> 64
                 items = self.transform(
                     torch.cat([final_image_emb, final_text_emb], dim=1)
                 )  # [# of items, feat_embed_dim]
@@ -303,6 +326,8 @@ class MeGCN(nn.Module):
                     )
                 )  # [# of users, feat_embed_dim]
 
+        # user preference of image/text, user CF embedding
+        # embedding of image/text, item CF embedding
         return user_preference, items
 
 
@@ -418,6 +443,7 @@ class MONET(nn.Module):
             )  # (batch_size, dim)
 
             # predictor
+            # self.beta -> 0.3
             pos_scores = (1 - self.beta) * torch.sum(
                 torch.mul(current_user_emb, pos_item_emb), dim=1
             ) + self.beta * torch.sum(torch.mul(pos_target_user, pos_item_emb), dim=1)

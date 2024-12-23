@@ -100,8 +100,10 @@ class Data(object):
 
     def sample(self):
         if self.batch_size <= self.n_users:
+            # 중복 없이 사용자 샘플링
             users = rd.sample(self.exist_users, self.batch_size)
         else:
+            # 중복 허용 샘플링
             users = [rd.choice(self.exist_users) for _ in range(self.batch_size)]
         # users = self.exist_users[:]
 
