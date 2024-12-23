@@ -420,21 +420,27 @@ class MONET(nn.Module):
 
         if target_aware:
             # target-aware
+            # (item_num, item_num) shape
             item_item = torch.mm(item_emb, item_emb.T)
             pos_item_query = item_item[pos_items, :]  # (batch_size, n_items)
             neg_item_query = item_item[neg_items, :]  # (batch_size, n_items)
+            # element-wise -> 0인 값은 -1e9로 세팅 -> softmax함수 통과
             pos_target_user_alpha = torch.softmax(
                 torch.multiply(pos_item_query, self.adj[users, :]).masked_fill(
                     self.adj[users, :] == 0, -1e9
                 ),
                 dim=1,
             )  # (batch_size, n_items)
+            # 여기서 -1e9로 세팅되지 않는 값이 별로 없을 것 같은데, 
+            # 그 값들이 softmax를 통과하면 더 영향이 커지지 않는가?
+            # beta로 작은 가중치를 주어도 크게 작용되지 않을까?
             neg_target_user_alpha = torch.softmax(
                 torch.multiply(neg_item_query, self.adj[users, :]).masked_fill(
                     self.adj[users, :] == 0, -1e9
                 ),
                 dim=1,
             )  # (batch_size, n_items)
+            # (batch_size, 64)
             pos_target_user = torch.mm(
                 pos_target_user_alpha, item_emb
             )  # (batch_size, dim)
@@ -444,6 +450,7 @@ class MONET(nn.Module):
 
             # predictor
             # self.beta -> 0.3
+            # 긍정에 0.7, 부정에 0.3 가중치 곱해서 score계산
             pos_scores = (1 - self.beta) * torch.sum(
                 torch.mul(current_user_emb, pos_item_emb), dim=1
             ) + self.beta * torch.sum(torch.mul(pos_target_user, pos_item_emb), dim=1)
@@ -457,11 +464,13 @@ class MONET(nn.Module):
         maxi = F.logsigmoid(pos_scores - neg_scores)
         mf_loss = -torch.mean(maxi)
 
+        # l2노름은 아닌데 비슷한 정규화 항. 제곱의 합에 1/2를 하여 더함
         regularizer = (
             1.0 / 2 * (pos_item_emb**2).sum()
             + 1.0 / 2 * (neg_item_emb**2).sum()
             + 1.0 / 2 * (current_user_emb**2).sum()
         )
+        # 배치 만큼 나누기
         emb_loss = regularizer / pos_item_emb.size(0)
 
         reg_loss = 0.0

@@ -73,6 +73,7 @@ class Trainer(object):
     def test(self, users_to_test, is_val):
         self.model.eval()
         with torch.no_grad():
+            # 여기는 왜 is_val이 안넘어가는가?
             ua_embeddings, ia_embeddings = self.model()
         result = test_torch(
             ua_embeddings,
@@ -114,8 +115,9 @@ class Trainer(object):
                 # batch size만큼 user, positive/negative item.
                 users, pos_items, neg_items = data_generator.sample()
 
+                # batch_reg_loss -> 0.0
                 batch_mf_loss, batch_emb_loss, batch_reg_loss = self.model.bpr_loss(
-                    user_emb, item_emb, users, pos_items, neg_items, self.target_aware
+                    user_emb, item_emb, users, pos_items, neg_items, self.target_aware # True
                 )
 
                 batch_emb_loss = self.decay * batch_emb_loss
@@ -152,6 +154,7 @@ class Trainer(object):
                 continue
 
             t2 = time()
+            # user의 uid list
             users_to_test = list(data_generator.test_set.keys())
             users_to_val = list(data_generator.val_set.keys())
             ret = self.test(users_to_val, is_val=True)
