@@ -88,6 +88,7 @@ class MeGCN(nn.Module):
         self.n_layers = n_layers
         self.has_norm = has_norm
         self.feat_embed_dim = feat_embed_dim
+        # (2, max(user_num, item_num))
         self.nonzero_idx = torch.tensor(nonzero_idx).cuda().long().T
         self.alpha = alpha
         self.agg = agg
@@ -100,6 +101,7 @@ class MeGCN(nn.Module):
         nn.init.xavier_uniform_(self.image_preference.weight)
         nn.init.xavier_uniform_(self.text_preference.weight)
 
+        # image_feats, text_feats는 이미 학습 된 임베딩 된 결과!
         self.image_embedding = nn.Embedding.from_pretrained(
             torch.tensor(image_feats, dtype=torch.float), freeze=True
         )  # [# of items, 4096]
@@ -118,12 +120,15 @@ class MeGCN(nn.Module):
 
         if not self.cf:
             if self.agg == "fc":
+                # multimodal의 개수
                 self.transform = nn.Linear(self.feat_embed_dim * 2, self.feat_embed_dim)
             elif self.agg == "weighted_sum":
+                # 임베딩 된 결과를 대상으로 가중치를 학습시켜서 진행
                 self.modal_weight = nn.Parameter(torch.Tensor([0.5, 0.5]))
                 self.softmax = nn.Softmax(dim=0)
         else:
             if self.agg == "fc":
+                # multimodal의 개수
                 self.transform = nn.Linear(self.feat_embed_dim * 3, self.feat_embed_dim)
             elif self.agg == "weighted_sum":
                 self.modal_weight = nn.Parameter(torch.Tensor([0.33, 0.33, 0.33]))
