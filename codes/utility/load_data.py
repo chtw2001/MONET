@@ -155,6 +155,7 @@ class Data(object):
 def dataset_merge_and_split(path):
     df = pd.read_csv(path + "/train.csv", index_col=None, usecols=None)
     # Construct matrix
+    # train, text merge
     ui = defaultdict(list)
     for _, row in df.iterrows():
         user, item = int(row["userID"]), int(row["itemID"])
@@ -181,6 +182,7 @@ def dataset_merge_and_split(path):
         val_json[u] = [items[idx] for idx in val.tolist()]
         test_json[u] = [items[idx] for idx in test.tolist()]
 
+    # train, validation, test dataset split
     with open(path + "/5-core/train.json", "w") as f:
         json.dump(train_json, f)
     with open(path + "/5-core/val.json", "w") as f:
@@ -201,6 +203,7 @@ def load_textual_image_features(data_path):
     for asin in asin_dict:
         text_vec[asin] = doc2vec_model.docvecs[asin]
 
+    # key: itemID, value: asin
     all_dict = {}
     num_items = 0
     filename = data_path + "/train.csv"
