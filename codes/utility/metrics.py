@@ -71,9 +71,11 @@ def ndcg_at_k(r, k, method=1):
     Returns:
         Normalized discounted cumulative gain
     """
+    # 상위 k개 중 n개를 맞추었다면 최상위 n개로 dcg게산한 값이 최대 값
     dcg_max = dcg_at_k(sorted(r, reverse=True), k, method)
     if not dcg_max:
         return 0.0
+    # normalize
     return dcg_at_k(r, k, method) / dcg_max
 
 

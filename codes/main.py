@@ -188,6 +188,7 @@ class Trainer(object):
             if ret["recall"][1] > best_recall:
                 best_recall = ret["recall"][1]
                 stopping_step = 0
+                # 가중치 저장
                 torch.save(
                     {self.model_name: self.model.state_dict()},
                     "./models/" + self.dataset + "_" + self.model_name,
@@ -198,7 +199,7 @@ class Trainer(object):
             else:
                 print("#####Early stop! #####")
                 break
-
+        # 모델 새로 초기화 및 학습 된 가중치 로드
         self.model = MONET(
             self.n_users,
             self.n_items,

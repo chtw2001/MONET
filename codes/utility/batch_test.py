@@ -23,7 +23,7 @@ if args.target_aware:
 else:
     BATCH_SIZE = args.batch_size
 
-
+# test_flag == 'part
 def ranklist_by_heapq(user_pos_test, test_items, rating, Ks):
     item_score = {}
     for i in test_items:
@@ -44,6 +44,7 @@ def ranklist_by_heapq(user_pos_test, test_items, rating, Ks):
 
 def get_auc(item_score, user_pos_test):
     item_score = sorted(item_score.items(), key=lambda kv: kv[1])
+    # 선호도 내림차순
     item_score.reverse()
     item_sort = [x[0] for x in item_score]
     posterior = [x[1] for x in item_score]
@@ -57,7 +58,7 @@ def get_auc(item_score, user_pos_test):
     auc = metrics.auc(ground_truth=r, prediction=posterior)
     return auc
 
-
+# test_flae == 'full
 def ranklist_by_sorted(user_pos_test, test_items, rating, Ks):
     item_score = {}
     for i in test_items:
@@ -115,6 +116,7 @@ def test_one_user(x):
     test_items = list(all_items - set(training_items))
 
     if args.test_flag == "part":
+        # auc == 0.0
         r, auc = ranklist_by_heapq(user_pos_test, test_items, rating, Ks)
     else:
         r, auc = ranklist_by_sorted(user_pos_test, test_items, rating, Ks)
@@ -123,6 +125,7 @@ def test_one_user(x):
 
 
 def test_torch(
+    # (item_num, 64)
     ua_embeddings, ia_embeddings, users_to_test, is_val, adj, beta, target_aware
 ):
     result = {
@@ -137,17 +140,21 @@ def test_torch(
     u_batch_size = BATCH_SIZE * 2
     i_batch_size = BATCH_SIZE
 
+    # user's uid
     test_users = users_to_test
     n_test_users = len(test_users)
     n_user_batchs = n_test_users // u_batch_size + 1
     count = 0
 
+    # (item_num, item_num)
     item_item = torch.mm(ia_embeddings, ia_embeddings.T)
 
+    # tqdm -> iter + dynamic print
     for u_batch_id in tqdm(range(n_user_batchs), position=1, leave=False):
         start = u_batch_id * u_batch_size
         end = (u_batch_id + 1) * u_batch_size
         user_batch = test_users[start:end]
+        # (1-beta)*원본 출력 + beta*user-item간 중요도 출력
         if target_aware:
             n_item_batchs = ITEM_NUM // i_batch_size + 1
             rate_batch = np.zeros(shape=(len(user_batch), ITEM_NUM))
@@ -163,8 +170,12 @@ def test_torch(
 
                 # target-aware
                 item_query = item_item[item_batch, :]  # (item_batch_size, n_items)
+                # user와 item간 중요도를 확률로 계산 
                 item_target_user_alpha = torch.softmax(
                     torch.multiply(
+                        # item_query.unsqueeze(1) -> (item_batch_size, 1, item_num) 
+                        # adj[user_batch, :].unsqueeze(0) -> (1, user_batch_size, item_num)
+                        # torch.mul -> (item_batch_size, user_batch_size, item_num)
                         item_query.unsqueeze(1), adj[user_batch, :].unsqueeze(0)
                     ).masked_fill(
                         adj[user_batch, :].repeat(len(item_batch), 1, 1) == 0, -1e9
@@ -172,20 +183,25 @@ def test_torch(
                     dim=2,
                 )  # (item_batch_size, user_batch_size, n_items)
                 item_target_user = torch.matmul(
-                    item_target_user_alpha, ia_embeddings
+                    item_target_user_alpha, ia_embeddings # (item_num, 64)
                 )  # (item_batch_size, user_batch_size, dim)
 
                 # target-aware
+                # 기본적으로 출력된 임베딩 결과를 (1-bata)만큼 가중치 +
+                # item에 대한 선호도로 계산 된 결과를 beta만큼 가중치
                 i_rate_batch = (1 - beta) * torch.matmul(
+                    # (user_batch_size, item_batch_size)
                     u_g_embeddings, torch.transpose(i_g_embeddings, 0, 1)
                 ) + beta * torch.sum(
                     torch.mul(
+                        # (user_batch_size, item_batch_size)
                         item_target_user.permute(1, 0, 2).contiguous(), i_g_embeddings
                     ),
                     dim=2,
                 )
 
                 rate_batch[:, i_start:i_end] = i_rate_batch.detach().cpu().numpy()
+                # item_batch_size
                 i_count += i_rate_batch.shape[1]
 
                 del (
@@ -204,11 +220,13 @@ def test_torch(
             u_g_embeddings = ua_embeddings[user_batch]
             i_g_embeddings = ia_embeddings[item_batch]
 
+            # 전체 batch에 대해서 출력값 계산
             rate_batch = torch.matmul(
                 u_g_embeddings, torch.transpose(i_g_embeddings, 0, 1)
             )
             rate_batch = rate_batch.detach().cpu().numpy()
 
+        # (선호도, user, is_val이 True일 때 item 아니면 0)
         user_batch_rating_uid = zip(rate_batch, user_batch, [is_val] * len(user_batch))
 
         batch_result = pool.map(test_one_user, user_batch_rating_uid)
