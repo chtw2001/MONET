@@ -435,7 +435,6 @@ class MONET(nn.Module):
             # 여기서 -1e9로 세팅되지 않는 값이 별로 없을 것 같은데, 
             # 그 값들이 softmax를 통과하면 더 영향이 커지지 않는가?
             # beta로 작은 가중치를 주어도 크게 작용되지 않을까?
-            ### 일부로 더 부정적인 정도를 키우는 것이구나
             neg_target_user_alpha = torch.softmax(
                 torch.multiply(neg_item_query, self.adj[users, :]).masked_fill(
                     self.adj[users, :] == 0, -1e9
@@ -452,7 +451,7 @@ class MONET(nn.Module):
 
             # predictor
             # self.beta -> 0.3
-            # 긍정에 0.7, 부정에 0.3 가중치 곱해서 score계산
+            # cf에 0.7, target aware에 0.3 가중치 곱해서 score계산
             pos_scores = (1 - self.beta) * torch.sum(
                 torch.mul(current_user_emb, pos_item_emb), dim=1
             ) + self.beta * torch.sum(torch.mul(pos_target_user, pos_item_emb), dim=1)
